@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "logi-pop-ha-bridge"
+version = "0.0.8"
+description = "A Bridge to trigger Home Assistant automations via Logitech POP buttons"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "paho-mqtt",
+    "bleak",
+    "python-dotenv",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pre-commit",
+]
+
+# flake8 configuration
+[tool.flake8]
+max-line-length = 120

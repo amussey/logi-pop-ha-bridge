@@ -1,0 +1,16 @@
+services:
+  logi_pop_switch_broker:
+    image: logi_pop_switches:latest
+    container_name: logi_pop_switch_broker
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8400:8400"
+    environment:
+      - DBUS_SYSTEM_BUS_ADDRESS=unix:path=/host/run/dbus/system_bus_socket
+    volumes:
+      - /run/dbus:/host/run/dbus:ro
+    restart: unless-stopped
+    privileged: true
+    env_file: ".env"
