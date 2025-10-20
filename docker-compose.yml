@@ -11,6 +11,7 @@ services:
       - DBUS_SYSTEM_BUS_ADDRESS=unix:path=/host/run/dbus/system_bus_socket
     volumes:
       - /run/dbus:/host/run/dbus:ro
+      - .:/app
     restart: unless-stopped
     privileged: true
     env_file: ".env"

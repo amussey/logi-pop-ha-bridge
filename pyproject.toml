@@ -14,6 +14,16 @@ dependencies = [
     "python-dotenv",
 ]
 
+# Poetry configuration for source directory
+[tool.poetry]
+packages = [
+    { include = "logi_ha_bridge" }
+]
+
+# Specify the source directory for the project
+[tool.setuptools.packages.find]
+where = ["logi_ha_bridge"]
+
 [project.optional-dependencies]
 dev = [
     "pre-commit",
