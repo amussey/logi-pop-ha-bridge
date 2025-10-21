@@ -1,6 +1,6 @@
 name: "Logi Pop Switch Bridge"
 description: "A Bridge to trigger Home Assistant automations via Logitech POP buttons"
-version: "0.0.8"
+version: "0.0.21"
 slug: "logi_pop_switches"
 init: false
 arch:
@@ -10,6 +10,28 @@ arch:
   - armv7
   - i386
 startup: services
+options:
+  log_level: "debug"
+  trigger_device_address: "AA:BB:CC:DD:EE:FF"
+  mqtt_broker:
+    address: "core-mosquitto"
+    port: 1883
+    username: "user"
+    password: ""
+  device:
+    unique_id: "logi_pop_switch_temp"
+    name: "Logi Pop Switch"
+schema:
+  log_level: "list(trace|debug|info|warning|error|fatal)"
+  trigger_device_address: str
+  mqtt_broker:
+    address: str
+    port: port
+    username: str
+    password: password
+  device:
+    unique_id: str
+    name: str
 ports:
   8400/tcp: 8400
 host_dbus: true

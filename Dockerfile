@@ -1,4 +1,8 @@
-FROM python:3.12-slim
+ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base-python:3.12
+FROM ${BUILD_FROM}
+
+# Install dependencies
+RUN apk add --no-cache python3 py3-pip curl build-base
 
 ENV POETRY_HOME="/opt/poetry" \
     POETRY_NO_INTERACTION=1
@@ -6,23 +10,21 @@ ENV POETRY_HOME="/opt/poetry" \
 # Prepend poetry and venv to path
 ENV PATH="$POETRY_HOME/bin:$PATH"
 
-# Install Poetry
-RUN apt-get update && apt-get install --no-install-recommends -y curl \
-    && curl -sSL https://install.python-poetry.org | python3 -
+# Install Poetry using curl
+RUN curl -sSL https://install.python-poetry.org | python3 -
 
-# Create application directory
-RUN mkdir /app
+# Set the working directory
 WORKDIR /app
 
 # Install dependencies
-ADD pyproject.toml /app/pyproject.toml
+COPY pyproject.toml ./
 RUN poetry config virtualenvs.create false \
     && poetry install --no-root \
     && rm -rf /root/.cache/pip /root/.cache/pypoetry
 
 # Copy the application code
-ADD logi_ha_bridge /app/logi_ha_bridge
-COPY run.sh /app/run.sh
-RUN chmod a+x /app/run.sh
+COPY logi_ha_bridge/ /app/logi_ha_bridge
+COPY run.sh /
+RUN chmod a+x /run.sh
 
-CMD [ "/app/run.sh" ]
+CMD [ "/run.sh" ]
