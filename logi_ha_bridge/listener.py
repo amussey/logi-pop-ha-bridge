@@ -1,9 +1,8 @@
 import asyncio
 
-from bleak import AdvertisementData, BleakScanner, BLEDevice
+from bleak import BleakError, BleakScanner
 from button import LogiButton
 from config import Config
-from inventory import LogiButtonInventory
 from mqtt_client import MqttClient
 
 
@@ -13,7 +12,6 @@ class LogiHaBridgeListener:
     def __init__(self):
         print("Initializing Logi HA Bridge...")
         self.config = Config.load()
-        self.logi_button_inventory = LogiButtonInventory()
         self.mqtt_client = MqttClient(self.config)
 
     async def run(self):
@@ -25,24 +23,20 @@ class LogiHaBridgeListener:
         self.mqtt_client.start()
 
         print("Starting Logi Switch listener...")
-        scanner = BleakScanner(detection_callback=self.on_advertisement)
-        await scanner.start()
-
         try:
             while True:
-                await asyncio.sleep(5)
+                try:
+                    device = await BleakScanner.find_device_by_filter(
+                        LogiButton.is_logi_button, timeout=5.0
+                    )
+                    if device:
+                        logi_button = LogiButton(device, self.mqtt_client)
+                        await logi_button.listen()
+                except BleakError as e:
+                    print("BLE Error during scanning:", e)
+                    await asyncio.sleep(2)
+                    continue
         except KeyboardInterrupt:
             print("\nStopping scanner...")
-            await scanner.stop()
+            # await scanner.stop()
             self.mqtt_client.stop()
-
-    def on_advertisement(
-        self, device: BLEDevice, advertisement_data: AdvertisementData
-    ):
-        """
-        Listens for a new event from the switch and publishes an MQTT message.
-        """
-        if LogiButton.is_logi_button(device, advertisement_data):
-            self.logi_button_inventory.process_event(device, advertisement_data)
-
-            # mqtt_client.publish(ACTION_TOPIC, "press")
