@@ -43,6 +43,14 @@ class LogiButton:
     def name(self):
         return f"Logi Pop Switch ({self.address.replace(':', '').lower()})"
 
+    @property
+    def action_topic(self):
+        return f"homeassistant/device_automation/{self.device_id}/action"
+
+    @property
+    def config_topic(self):
+        return f"homeassistant/device_automation/{self.device_id}/config"
+
     @classmethod
     def is_logi_button(cls, device: BLEDevice, advertisement_data: AdvertisementData):
         """

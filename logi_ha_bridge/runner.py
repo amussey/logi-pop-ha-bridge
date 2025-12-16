@@ -1,78 +1,15 @@
 # logi_ha_bridge.py
 
 import asyncio
-import json
-import os
 
-import paho.mqtt.client as mqtt
 from bleak import AdvertisementData, BleakScanner, BLEDevice
 from button import LogiButton, LogiButtonInventory
-from dotenv import load_dotenv
-
-load_dotenv()  # Loads variables from .env into os.environ
-print("Loading environment variables...")
-
-# --- CONFIGURATION ---
-# -- Bluetooth Settings --
-TRIGGER_DEVICE_ADDRESS = os.environ.get("TRIGGER_DEVICE_ADDRESS")
-LOGITECH_MFG_ID = 257
-
-# -- MQTT Settings --
-MQTT_BROKER_ADDRESS = os.environ.get("MQTT_BROKER_ADDRESS")
-MQTT_PORT = int(os.environ.get("MQTT_PORT", 1883))
-MQTT_USERNAME = os.environ.get("MQTT_USERNAME")
-MQTT_PASSWORD = os.environ.get("MQTT_PASSWORD")
-
-# --- Home Assistant MQTT Discovery Settings ---
-# You can change these, but the defaults are good.
-DEVICE_UNIQUE_ID = "logi_pop_switch_{}".format(
-    TRIGGER_DEVICE_ADDRESS.replace(":", "").lower()
-)
-DEVICE_NAME = "Logi Pop Switch ({})".format(
-    TRIGGER_DEVICE_ADDRESS.replace(":", "").lower()
-)
-# This is the topic Home Assistant will listen to for the button press.
-ACTION_TOPIC = f"homeassistant/device_automation/{DEVICE_UNIQUE_ID}/action"
-# This is the special topic for telling Home Assistant about our device.
-CONFIG_TOPIC = f"homeassistant/device_automation/{DEVICE_UNIQUE_ID}/config"
+from config import Config
+from mqtt_client import MqttClient
 
 # --- State Management ---
 logi_button_inventory = LogiButtonInventory()
-
-
-def on_connect(client, userdata, flags, rc):
-    """Callback for when the client connects to the MQTT broker."""
-    if rc == 0:
-        print("Connected to MQTT Broker successfully!")
-        # Once connected, publish the discovery configuration.
-        publish_ha_discovery_config(client)
-    else:
-        print(f"Failed to connect to MQTT Broker, return code {rc}\n")
-
-
-def publish_ha_discovery_config(client):
-    """
-    Publishes the configuration payload to Home Assistant's discovery topic.
-    This makes the button appear as a device with a trigger.
-    """
-    discovery_payload = {
-        "automation_type": "trigger",
-        "topic": ACTION_TOPIC,
-        "type": "button_short_press",  # We can use any of HA's built-in types
-        "subtype": "button_1",
-        "payload": "press",  # The message we'll send on the action topic
-        "device": {
-            "identifiers": [DEVICE_UNIQUE_ID],
-            "name": DEVICE_NAME,
-            "manufacturer": "Logitech (via Python Bridge)",
-        },
-    }
-    # Convert dict to JSON string and publish
-    payload_str = json.dumps(discovery_payload)
-    print(f"Publishing MQTT Discovery config to: {CONFIG_TOPIC}")
-    client.publish(
-        CONFIG_TOPIC, payload_str, retain=True
-    )  # Retain ensures HA sees it after a restart
+config = Config.load()
 
 
 def on_advertisement(device: BLEDevice, advertisement_data: AdvertisementData):
@@ -84,14 +21,7 @@ def on_advertisement(device: BLEDevice, advertisement_data: AdvertisementData):
     if LogiButton.is_logi_button(device, advertisement_data):
         logi_button_inventory.process_event(device, advertisement_data)
 
-
-# --- Main Execution ---
-# Set up MQTT client
-print("Setting up MQTT client...")
-mqtt_client = mqtt.Client()
-mqtt_client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
-mqtt_client.on_connect = on_connect
-print("MQTT client set up.")
+        # mqtt_client.publish(ACTION_TOPIC, "press")
 
 
 async def main():
@@ -100,9 +30,8 @@ async def main():
     print("Starting Logi HA Bridge!")
     print("-" * 80)
 
-    print("Attempting to connect to MQTT broker...")
-    mqtt_client.connect(MQTT_BROKER_ADDRESS, MQTT_PORT, 60)
-    mqtt_client.loop_start()  # Start MQTT client in the background
+    mqtt_client = MqttClient(config)
+    mqtt_client.start()
 
     print("Starting Logi Switch listener...")
     scanner = BleakScanner(detection_callback=on_advertisement)
@@ -114,8 +43,7 @@ async def main():
     except KeyboardInterrupt:
         print("\nStopping scanner...")
         await scanner.stop()
-        mqtt_client.loop_stop()
-        mqtt_client.disconnect()
+        mqtt_client.stop()
 
 
 if __name__ == "__main__":
