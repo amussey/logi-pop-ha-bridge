@@ -5,7 +5,8 @@ import json
 import os
 
 import paho.mqtt.client as mqtt
-from bleak import BleakScanner
+from bleak import AdvertisementData, BleakScanner, BLEDevice
+from button import LogiButton, LogiButtonInventory
 from dotenv import load_dotenv
 
 load_dotenv()  # Loads variables from .env into os.environ
@@ -36,7 +37,7 @@ ACTION_TOPIC = f"homeassistant/device_automation/{DEVICE_UNIQUE_ID}/action"
 CONFIG_TOPIC = f"homeassistant/device_automation/{DEVICE_UNIQUE_ID}/config"
 
 # --- State Management ---
-last_processed_counter = -1
+logi_button_inventory = LogiButtonInventory()
 
 
 def on_connect(client, userdata, flags, rc):
@@ -74,30 +75,14 @@ def publish_ha_discovery_config(client):
     )  # Retain ensures HA sees it after a restart
 
 
-def on_advertisement(device, advertisement_data):
+def on_advertisement(device: BLEDevice, advertisement_data: AdvertisementData):
     """
     Listens for a new event from the switch and publishes an MQTT message.
     """
-    global last_processed_counter
+    global logi_button_inventory
 
-    if (
-        device.address == TRIGGER_DEVICE_ADDRESS
-        and LOGITECH_MFG_ID in advertisement_data.manufacturer_data
-    ):
-        data = advertisement_data.manufacturer_data[LOGITECH_MFG_ID]
-
-        if len(data) >= 12:
-            event_counter = data[11]
-
-            # If this is a new event counter we haven't processed yet...
-            if event_counter != last_processed_counter:
-                last_processed_counter = event_counter
-
-                print(f"\n--- BUTTON PRESS DETECTED (Counter: {event_counter}) ---")
-                print(f"Sending 'press' message to MQTT topic: {ACTION_TOPIC}")
-
-                # Publish the action message to the topic HA is listening on.
-                mqtt_client.publish(ACTION_TOPIC, "press")
+    if LogiButton.is_logi_button(device, advertisement_data):
+        logi_button_inventory.process_event(device, advertisement_data)
 
 
 # --- Main Execution ---
