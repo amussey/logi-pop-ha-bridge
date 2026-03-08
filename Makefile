@@ -8,7 +8,7 @@ run-docker:
 	docker compose up
 
 run-local:
-	python3 logi_ha_bridge/runner.py
+	python3 logi_pop_switches/logi_ha_bridge/runner.py
 
 run: run-local
 
