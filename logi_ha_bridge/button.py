@@ -79,31 +79,113 @@ class LogiButton:
         )
         self.mqtt_client.client.publish(self.action_topic, "press")
 
-    async def listen(self):
-        print(f"Listening for events from button: {self.device.address}")
-        # Additional listening logic can be implemented here
-        if self.trigger_click_on_connect:
-            self._trigger_press("Connection Press")
-        async with BleakClient(self.device) as client:
-            try:
-                if client.is_connected:
-                    print(f"Connected to button: {self.address}")
-                    if self.seen_nonces is None:
-                        self.seen_nonces = set()
-                    self.seen_nonces.clear()
+    async def try_read_click_type(self, timeout: float = 3.0) -> str | None:
+        """
+        Attempt a short-lived BLE connection to read the click type
+        (single / double / long press) via GATT notification.
 
-                    await client.start_notify(
-                        BUTTON_CHARACTERISTIC_UUID, self.notification_handler
+        Returns the click type string if successful, or None on timeout/failure.
+        This is best-effort - callers should NOT depend on it for the primary
+        press event.
+        """
+        try:
+            async with BleakClient(self.device) as client:
+                if not client.is_connected:
+                    return None
+
+                print(f"  Connected to {self.address} for click-type detection")
+
+                if self.seen_nonces is None:
+                    self.seen_nonces = set()
+                self.seen_nonces.clear()
+
+                click_type_result: list[str] = []
+                notification_received = asyncio.Event()
+
+                def _on_notify(sender, data: bytearray):
+                    if len(data) < 3:
+                        return
+
+                    click_type_byte = data[0]
+                    nonce = bytes(data[1:3])
+
+                    if nonce in self.seen_nonces:
+                        return
+                    self.seen_nonces.add(nonce)
+
+                    click_type_str = {
+                        0x02: "Single Press",
+                        0x03: "Long Press",
+                        0x04: "Double Press",
+                    }.get(click_type_byte, f"Unknown (0x{click_type_byte:02x})")
+
+                    click_type_result.append(click_type_str)
+                    notification_received.set()
+
+                await client.start_notify(BUTTON_CHARACTERISTIC_UUID, _on_notify)
+
+                try:
+                    await asyncio.wait_for(
+                        notification_received.wait(), timeout=timeout
                     )
+                    await asyncio.sleep(0.2)  # brief grace for duplicate data
+                    return click_type_result[0] if click_type_result else None
+                except asyncio.TimeoutError:
+                    return None
 
-                    while client.is_connected:
-                        await asyncio.sleep(0.5)
+        except Exception as e:
+            print(f"  Click-type read failed for {self.address}: {e}")
+            return None
+        finally:
+            print(f"  Done with click-type read for {self.address}")
 
-            except Exception as e:
-                print(f"Connection lost or failed: {e}")
-            finally:
-                print("Returning to scanning mode.")
-                await asyncio.sleep(0.1)
+    async def listen(self, timeout: float = 8.0):
+        """
+        Connect to the button, subscribe to notifications, and wait for a
+        click event.  Disconnects after receiving a notification or after
+        *timeout* seconds - whichever comes first.  This keeps the BLE
+        connection short-lived so the scanner can quickly service other buttons.
+        """
+        print(f"Connecting to button: {self.device.address}")
+        try:
+            async with BleakClient(self.device) as client:
+                if not client.is_connected:
+                    print(f"Failed to connect to button: {self.address}")
+                    return
+
+                print(f"Connected to button: {self.address}")
+
+                if self.seen_nonces is None:
+                    self.seen_nonces = set()
+                self.seen_nonces.clear()
+
+                # Event that fires when we receive a real notification.
+                notification_received = asyncio.Event()
+
+                def _on_notify(sender, data: bytearray):
+                    self.notification_handler(sender, data)
+                    notification_received.set()
+
+                await client.start_notify(BUTTON_CHARACTERISTIC_UUID, _on_notify)
+
+                # Wait for a notification or timeout.
+                try:
+                    await asyncio.wait_for(
+                        notification_received.wait(), timeout=timeout
+                    )
+                    # Brief grace period for any duplicate/follow-up data.
+                    await asyncio.sleep(0.3)
+                except asyncio.TimeoutError:
+                    # No GATT notification arrived - fire a fallback event so
+                    # the button press is not lost.
+                    print(f"No notification from {self.address} within {timeout}s")
+                    if self.trigger_click_on_connect:
+                        self._trigger_press("Press")
+
+        except Exception as e:
+            print(f"Connection to {self.address} failed: {e}")
+        finally:
+            print(f"Done with button {self.address}.")
 
     @property
     def address(self):
