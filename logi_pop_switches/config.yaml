@@ -1,6 +1,6 @@
 name: "Logi Pop Switch Bridge"
 description: "A Bridge to trigger Home Assistant automations via Logitech POP buttons"
-version: "0.0.21"
+version: "0.1.2"
 slug: "logi_pop_switches"
 init: false
 arch:
