@@ -5,7 +5,7 @@ from config import Config
 # Used for cross-instance deduplication: each bridge instance sees press
 # events published by other instances and enters cooldown to avoid
 # publishing a duplicate.
-LOGI_ACTION_TOPIC_WILDCARD = "homeassistant/device_automation/logi_pop_switch_+/action"
+LOGI_ACTION_TOPIC_WILDCARD = "homeassistant/device_automation/+/action"
 
 
 class MqttClient:
@@ -53,4 +53,6 @@ class MqttClient:
         parts = msg.topic.split("/")
         if len(parts) >= 3 and self._on_logi_press_callback:
             device_id = parts[2]
+            if not device_id.startswith("logi_pop_switch_"):
+                return
             self._on_logi_press_callback(device_id)
