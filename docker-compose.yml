@@ -3,7 +3,7 @@ services:
     image: logi_pop_switches:latest
     container_name: logi_pop_switch_broker
     build:
-      context: .
+      context: ./logi_pop_switches
       dockerfile: Dockerfile
     command: python3 -u /app/logi_ha_bridge/runner.py
     ports:
@@ -12,7 +12,7 @@ services:
       - DBUS_SYSTEM_BUS_ADDRESS=unix:path=/host/run/dbus/system_bus_socket
     volumes:
       - /run/dbus:/host/run/dbus:ro
-      - .:/app
+      - ./logi_pop_switches:/app
     restart: unless-stopped
     privileged: true
     env_file: ".env"
